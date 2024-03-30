@@ -1,0 +1,3 @@
+[submodule "tapoctl"]
+	path = tapoctl
+	url = git@github.com:/whysobad/tapoctl.git
