@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">Tapoctl</string>
+    <string name="nav_devices">Devices</string>
+    <string name="nav_devices_desc">Registered devices</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_settings_desc">Settings</string>
+    <string name="pref_category_server">Server</string>
+    <string name="pref_server_address">Server address</string>
+    <string name="pref_server_address_desc">The address of the tapoctl server</string>
+    <string name="pref_server_port">Server port</string>
+    <string name="pref_server_port_desc">The port on which the tapoctl server is served</string>
 </resources>
