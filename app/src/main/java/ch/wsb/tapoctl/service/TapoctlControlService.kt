@@ -1,4 +1,4 @@
-package ch.wsb.tapoctl
+package ch.wsb.tapoctl.service
 
 import android.app.PendingIntent
 import android.content.Intent
@@ -8,8 +8,7 @@ import android.service.controls.actions.BooleanAction
 import android.service.controls.actions.ControlAction
 import android.service.controls.actions.FloatAction
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import ch.wsb.tapoctl.*
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.StatusException
@@ -20,10 +19,8 @@ import kotlinx.coroutines.runBlocking
 import org.reactivestreams.FlowAdapters
 import tapo.TapoGrpcKt
 import tapo.TapoOuterClass
-import tapo.TapoOuterClass.EventResponse
 import tapo.TapoOuterClass.HueSaturation
 import tapo.TapoOuterClass.IntegerValueChange
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.Flow
 import java.util.function.Consumer
 
@@ -32,18 +29,19 @@ class TapoctlControlService : ControlsProviderService() {
     private lateinit var stub: TapoGrpcKt.TapoCoroutineStub;
     private lateinit var publisher: ReplayProcessor<Control>
     private lateinit var pending: PendingIntent
-    private lateinit var eventThread: Thread
 
-    private lateinit var devices: HashMap<String, DeviceControl>
+    private lateinit var eventThread: EventThread
+    private lateinit var settings: Settings
+    private lateinit var devices: DeviceManager
 
     override fun createPublisherForAllAvailable(): Flow.Publisher<Control> {
+        ensureServiceRunning(eventThread = false)
         val publisher = flow {
-            for ((_, ctrl) in devices) {
+            for ((_, ctrl) in devices.iterator()) {
                 if (ctrl.canControlBrightness()) emit(ctrl.getStatelessControl(DeviceControl.POWER_ID, "Power, Brightness"))
                 else emit(ctrl.getStatelessControl(DeviceControl.POWER_ID, "Power"))
                 if (ctrl.canControlTemperature()) emit(ctrl.getStatelessControl(DeviceControl.TEMPERATURE_ID, "Temperature"))
                 if (ctrl.canControlColor()) emit(ctrl.getStatelessControl(DeviceControl.HUE_ID, "Hue"))
-                devices[ctrl.id] = ctrl
             }
         }
 
@@ -51,34 +49,40 @@ class TapoctlControlService : ControlsProviderService() {
     }
 
     override fun createPublisherFor(controlIds: MutableList<String>): Flow.Publisher<Control> {
+        ensureServiceRunning(eventThread = true)
         runBlocking {
             for (compositeId in controlIds) {
                 val deviceId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[0]
                 val controlId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[1]
 
-                val ctrl = if (devices[deviceId] != null) devices[deviceId]!! else {
-                    publisher.onNext(DeviceControl.getUnavailableControl(deviceId, controlId, baseContext))
+                val ctrl = if (devices.exists(deviceId)) devices.get(deviceId)!! else {
+                    publisher.onNext(DeviceControl.getUnavailableControl(deviceId, controlId, baseContext, Control.STATUS_ERROR))
                     continue
                 }
 
-                val request = TapoOuterClass.DeviceRequest.newBuilder().setDevice(ctrl.name).build()
-                val response = stub.info(request)
+                try {
+                    val request = TapoOuterClass.DeviceRequest.newBuilder().setDevice(ctrl.name).build()
+                    val response = stub.info(request)
 
-                val builder = when (controlId) {
-                    DeviceControl.POWER_ID -> {
-                        if (ctrl.canControlBrightness()) ctrl.getPowerBrightnessControl(response.deviceOn, response.brightness)
-                        else ctrl.getPowerControl(response.deviceOn)
+                    val builder = when (controlId) {
+                        DeviceControl.POWER_ID -> {
+                            if (ctrl.canControlBrightness()) ctrl.getPowerBrightnessControl(response.deviceOn, response.brightness)
+                            else ctrl.getPowerControl(response.deviceOn)
+                        }
+                        DeviceControl.HUE_ID -> ctrl.getHueControl(response.hue)
+                        DeviceControl.TEMPERATURE_ID -> {
+                            if (response.hasTemperature()) ctrl.getTemperatureControl(response.temperature)
+                            else ctrl.getTemperatureControl(2500).setStatus(Control.STATUS_DISABLED)
+                        }
+                        else -> null
                     }
-                    DeviceControl.HUE_ID -> ctrl.getHueControl(response.hue)
-                    DeviceControl.TEMPERATURE_ID -> {
-                        if (response.hasTemperature()) ctrl.getTemperatureControl(response.temperature)
-                        else ctrl.getTemperatureControl(2500).setStatus(Control.STATUS_DISABLED)
-                    }
-                    else -> null
+
+                    if (builder != null) publisher.onNext(builder.build())
+                    else Log.w("DeviceControl", "Control $controlId for $deviceId did not match any known control id")
+                } catch (e: StatusException) {
+                    Log.e("createPublisherFor", e.toString())
+                    publisher.onNext(DeviceControl.getUnavailableControl(deviceId, controlId, baseContext, Control.STATUS_ERROR))
                 }
-
-                if (builder != null) publisher.onNext(builder.build())
-                else Log.w("DeviceControl", "Control $controlId for $deviceId did not match any known control id")
             }
         }
 
@@ -89,7 +93,7 @@ class TapoctlControlService : ControlsProviderService() {
         val deviceId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[0]
         val controlId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[1]
 
-        val ctrl = devices[deviceId]!!
+        val ctrl = devices.get(deviceId)!!
 
         val builder = TapoOuterClass.SetRequest.newBuilder().setDevice(ctrl.name)
 
@@ -132,38 +136,80 @@ class TapoctlControlService : ControlsProviderService() {
     }
 
     override fun onCreate() {
-        Log.i("System", "Created")
-        super.onCreate()
-        channel = ManagedChannelBuilder.forAddress("192.168.1.173", 19191).usePlaintext().build()
-        stub = TapoGrpcKt.TapoCoroutineStub(channel)
-        publisher = ReplayProcessor.create()
+        Log.i("Service", "Created")
+        settings = Settings(baseContext.Datastore)
         pending = PendingIntent.getActivity(baseContext, 1, Intent(), PendingIntent.FLAG_IMMUTABLE)
-        runBlocking { loadDevices() }
-        startEventThread()
+        publisher = ReplayProcessor.create()
+        ensureServiceRunning(eventThread = true)
     }
 
     override fun onDestroy() {
-        Log.i("System", "Destroyed")
-        super.onDestroy()
+        Log.i("Service", "Destroyed")
         if (::eventThread.isInitialized) eventThread.interrupt()
+        if (::channel.isInitialized) channel.shutdownNow()
     }
 
-    private fun handleEvent(event: EventResponse) {
+    private fun ensureServiceRunning(eventThread: Boolean) {
+        if (::channel.isInitialized) channel.shutdownNow()
+        runBlocking {
+            setupGrpc()
+            devices = DeviceManager(stub, baseContext)
+            devices.fetchDevices()
+        }
+        if (eventThread) {
+            if (::eventThread.isInitialized) this.eventThread.interrupt()
+            setupEventThread()
+        }
+    }
 
-        // Log.i("Event", body.toString())
+    private suspend fun setupGrpc() {
+        try {
+            val address = settings.serverAddress.firstOrNull() ?: DEFAULT_SERVER_ADDRESS
+            val port = settings.serverPort.firstOrNull() ?: DEFAULT_SERVER_PORT
+            val protocol = settings.serverProtocol.firstOrNull() ?: DEFAULT_SERVER_PROTOCOL
 
-        when (event.type) {
-            TapoOuterClass.EventType.DeviceAuthChange -> {
-                Log.i("Event", "Received device auth state change event")
+            val builder = ManagedChannelBuilder
+                .forAddress(address, port)
+                .enableRetry()
+                .maxRetryAttempts(5)
+
+            if (protocol == "https") builder.useTransportSecurity()
+            else builder.usePlaintext()
+
+            channel = builder.build()
+            stub = TapoGrpcKt.TapoCoroutineStub(channel)
+        } catch (e: StatusException) {
+            Log.e("SetupGrpc", e.toString())
+        }
+    }
+
+    private fun setupEventThread() {
+        eventThread = EventThread(stub) { handleEvent(it) }
+        eventThread.start()
+    }
+
+    private fun handleEvent(event: Event) {
+        when (event) {
+            is Event.DeviceAuthChanged -> {
+                val device = event.device
+                val ctrl = devices.getDeviceByControl(device.name)
+
+                if (ctrl == null) {
+                    Log.w("Event", "Device ${device.name} not found")
+                    return
+                }
+
+                if (device.status === TapoOuterClass.SessionStatus.Authenticated) {
+                    // TODO: Update with current device info
+                } else {
+                    publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.POWER_ID, baseContext, Control.STATUS_ERROR))
+                    if (ctrl.canControlTemperature()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.TEMPERATURE_ID, baseContext, Control.STATUS_ERROR))
+                    if (ctrl.canControlColor()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.HUE_ID, baseContext, Control.STATUS_ERROR))
+                }
             }
-            TapoOuterClass.EventType.DeviceStateChange -> {
-                Log.i("Event", "Received device state change event")
-
-                val mapAdapter = Gson().getAdapter(object: TypeToken<Info>() {})
-                val info = mapAdapter.fromJson(String(event.body.toByteArray(), StandardCharsets.UTF_8))
-                val ctrl = devices.values.find { ctrl -> ctrl.name == info.name }
-
-                Log.i("Event", info.color.toString())
+            is Event.DeviceStateChanged -> {
+                val info = event.info
+                val ctrl = devices.getDeviceByControl(info.name)
 
                 if (ctrl != null) {
                     if (ctrl.canControlBrightness()) publisher.onNext(ctrl.getPowerBrightnessControl(info.device_on, info.brightness).build())
@@ -172,40 +218,6 @@ class TapoctlControlService : ControlsProviderService() {
                     if (ctrl.canControlColor()) publisher.onNext(ctrl.getHueControl(info.hue).build())
                 } else Log.w("Event", "Device ${info.name} not found")
             }
-            TapoOuterClass.EventType.UNRECOGNIZED -> TODO()
-        }
-    }
-
-    private fun startEventThread() {
-        eventThread = Thread {
-            try {
-                runBlocking {
-                    val request = TapoOuterClass.EventRequest.newBuilder().build()
-                    try {
-                        stub.events(request).onEach { event -> handleEvent(event) }.collect()
-                    } catch (e: StatusException) {
-                        Log.i("Event", "Stream closed: $e")
-                    }
-                }
-            } catch (e: InterruptedException) {
-                Log.i("Event", "Interrupted event thread")
-                return@Thread
-            }
-        }
-        eventThread.start()
-    }
-
-    private suspend fun loadDevices() {
-        try {
-            devices = HashMap()
-            val devicesRequest = TapoOuterClass.Empty.newBuilder().build()
-            val response = stub.devices(devicesRequest)
-            for (dev in response.devicesList) {
-                val ctrl = DeviceControl(dev, baseContext)
-                devices[ctrl.id] = ctrl
-            }
-        } catch (e: StatusException) {
-            Log.e("DeviceControl", e.toString())
         }
     }
 }

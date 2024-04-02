@@ -46,9 +46,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TapoctlTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primary) {
-                    TapoctlApp(context = baseContext)
-                }
+                TapoctlApp(context = baseContext)
             }
         }
     }

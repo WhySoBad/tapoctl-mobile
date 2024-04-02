@@ -1,4 +1,4 @@
-package ch.wsb.tapoctl
+package ch.wsb.tapoctl.service
 
 import tapo.TapoOuterClass.SessionStatus
 

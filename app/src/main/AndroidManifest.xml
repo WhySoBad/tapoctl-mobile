@@ -26,7 +26,7 @@
             </intent-filter>
         </activity>
         <service
-                android:name="TapoctlControlService"
+                android:name=".service.TapoctlControlService"
                 android:label="Tapoctl"
                 android:permission="android.permission.BIND_CONTROLS"
                 android:exported="true"

@@ -9,66 +9,82 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import ch.wsb.tapoctl.Datastore
+import ch.wsb.tapoctl.*
 import ch.wsb.tapoctl.R
 import ch.wsb.tapoctl.ui.theme.Typography
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 
 // The whole `SettingsView` is subject to change
 // It seems like there is no clean implementation of xml `PreferencesScreen` for
 // compose (yet?)
 // Maybe implement the xml `PreferencesScreen` and then use it with `AndroidView()` composable
 
-val SERVER_ADDRESS_KEY = stringPreferencesKey("server_address")
-val SERVER_PORT_KEY = intPreferencesKey("server_port")
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsView(context: Context) {
-    val address = context.Datastore.data.map { preferences -> preferences[SERVER_ADDRESS_KEY] ?: "http://127.0.0.1" }
-    val port = context.Datastore.data.map { preferences -> preferences[SERVER_PORT_KEY] ?: 19191 }
+    val settings = Settings(context.Datastore)
+    var protocolOpen by remember { mutableStateOf(false) }
 
-    SettingsSection(
-        title = "Server"
-    ) {
+    SettingsSection("Server") {
         OutlinedTextField(
             label = { Text(stringResource(R.string.pref_server_address)) },
-            value = address.collectAsState("").value,
+            value = settings.serverAddress.collectAsState("").value,
             singleLine = true,
-            onValueChange = { value ->
-                runBlocking {
-                    context.Datastore.edit { settings ->
-                        settings[SERVER_ADDRESS_KEY] = value
-                    }
-                }
-            },
+            prefix = { Text("${settings.serverProtocol.collectAsState("").value}://") },
+            onValueChange = { settings.setServerAddress(it) },
             supportingText = { Text(stringResource(R.string.pref_server_address_desc)) },
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
             label = { Text(stringResource(R.string.pref_server_port)) },
-            value = port.collectAsState("").value.toString(),
+            value = settings.serverPort.collectAsState("").value.toString(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
             onValueChange = { value: String ->
                 try {
                     val port = value.toInt()
-                    if (port in 0..65535) {
-                        runBlocking {
-                            context.Datastore.edit { settings ->
-                                settings[SERVER_PORT_KEY] = port
-                            }
-                        }
-                    }
+                    if (port in 0..65535) settings.setServerPort(port)
                 } catch (_: NumberFormatException) {
                 }
             },
             supportingText = { Text(stringResource(R.string.pref_server_port_desc)) },
             modifier = Modifier.fillMaxWidth()
         )
+        ExposedDropdownMenuBox(
+            modifier = Modifier.fillMaxWidth(),
+            expanded = protocolOpen,
+            onExpandedChange = { protocolOpen = it },
+        ) {
+            OutlinedTextField(
+                label = { Text(stringResource(R.string.pref_server_protocol)) },
+                supportingText = { Text(stringResource(R.string.pref_server_protocol_desc)) },
+                value = settings.serverProtocol.collectAsState("").value,
+                readOnly = true,
+                onValueChange = {},
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = protocolOpen) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = protocolOpen,
+                onDismissRequest = { protocolOpen = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("https") },
+                    onClick = {
+                        settings.setServerProtocol("https")
+                        protocolOpen = false
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("http") },
+                    onClick = {
+                        settings.setServerProtocol("http")
+                        protocolOpen = false
+                    },
+                )
+            }
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-package ch.wsb.tapoctl
+package ch.wsb.tapoctl.service
 
 import android.app.PendingIntent
 import android.content.Context
@@ -26,18 +26,18 @@ class DeviceControl(private val device: Device, context: Context) {
         const val BRIGHTNESS_ID = "brightness"
         const val HUE_ID = "hue"
 
-        fun getUnavailableControl(deviceId: String, controlId: String, context: Context): Control {
+        fun getUnavailableControl(deviceId: String, controlId: String, context: Context, status: Int = Control.STATUS_UNKNOWN): Control {
             val intent: PendingIntent = PendingIntent.getActivity(context, 1, Intent(), PendingIntent.FLAG_IMMUTABLE)
             val compositeId = createCompositeId(deviceId, controlId)
             return StatefulBuilder(compositeId, intent)
                 .setDeviceType(DeviceTypes.TYPE_LIGHT)
-                .setStatus(Control.STATUS_UNKNOWN)
+                .setStatus(status)
                 .setTitle(getTextForControl(controlId))
                 .build()
         }
 
         private fun createCompositeId(deviceId: String, controlId: String): String {
-            return "$deviceId${DEVICE_IDENTIFIER_SEPARATOR}$controlId"
+            return "$deviceId$DEVICE_IDENTIFIER_SEPARATOR$controlId"
         }
 
         private fun getTextForControl(controlId: String): String {
