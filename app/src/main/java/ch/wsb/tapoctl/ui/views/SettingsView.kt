@@ -1,6 +1,5 @@
 package ch.wsb.tapoctl.ui.views
 
-import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -20,8 +19,7 @@ import ch.wsb.tapoctl.ui.theme.Typography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsView(context: Context) {
-    val settings = Settings(context.Datastore)
+fun SettingsView(settings: Settings) {
     var protocolOpen by remember { mutableStateOf(false) }
 
     SettingsSection("Server") {

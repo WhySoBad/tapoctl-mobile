@@ -11,13 +11,18 @@ import android.service.controls.templates.ControlButton
 import android.service.controls.templates.RangeTemplate
 import android.service.controls.templates.ToggleRangeTemplate
 import android.service.controls.templates.ToggleTemplate
+import android.util.Log
+import ch.wsb.tapoctl.GrpcConnection
+import io.grpc.StatusException
+import tapo.TapoOuterClass
 import tapo.TapoOuterClass.Device
+import tapo.TapoOuterClass.HueSaturation
 import java.util.*
 
 // random-ish separator which must not be contained in any device name
 const val DEVICE_IDENTIFIER_SEPARATOR: String = "[]_!_(&)"
 
-class DeviceControl(private val device: Device, context: Context) {
+class DeviceControl(private val device: Device, context: Context, private val connection: GrpcConnection) {
     companion object {
         private val COLORED_LIGHT_BULBS = listOf("L530", "L630", "L900")
         private val LIGHT_BULBS = listOf("L510", "L520", "L610")
@@ -53,9 +58,12 @@ class DeviceControl(private val device: Device, context: Context) {
 
     val id: String = device.name
     val name: String = device.name
+    val type: String = device.type
+
+    val capitalizedName =  device.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
 
     private val intent: PendingIntent = PendingIntent.getActivity(context, 1, Intent(), PendingIntent.FLAG_IMMUTABLE)
-    private val structure = device.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+    private val structure = capitalizedName
 
     private fun composeId(identifier: String): String {
         return createCompositeId(id, identifier)
@@ -151,5 +159,45 @@ class DeviceControl(private val device: Device, context: Context) {
 
     fun canGetUsage(): Boolean {
         return isColorLightBulb() || isNormalLightBulb()
+    }
+
+    suspend fun getInfo(): Info? {
+        try {
+            if (!connection.connected) connection.connect()
+            val request = TapoOuterClass.DeviceRequest.newBuilder().setDevice(name).build()
+            val response = connection.stub.info(request)
+            return Info(response)
+        } catch (e: StatusException) {
+            Log.e("DeviceControl", "Error during info gathering for $name: $e")
+            return null
+        }
+    }
+
+    suspend fun setPower(power: Boolean): TapoOuterClass.PowerResponse? {
+        try {
+            if (!connection.connected) connection.connect()
+            val request = TapoOuterClass.DeviceRequest.newBuilder().setDevice(name).build()
+            val response = if (power) connection.stub.on(request) else connection.stub.off(request)
+            return response
+        } catch (e: StatusException) {
+            Log.e("DeviceControl", "Error during power change for $name: $e")
+            return null
+        }
+    }
+
+    suspend fun set(power: Boolean? = null, hueSaturation: HueSaturation? = null, brightness: Int? = null, temperature: Int? = null): Info? {
+        try {
+            if (!connection.connected) connection.connect()
+            var builder = TapoOuterClass.SetRequest.newBuilder().setDevice(name)
+            power?.let { builder = builder.setPower(it) }
+            hueSaturation?.let { builder = builder.setHueSaturation(it) }
+            brightness?.let { builder = builder.setBrightness(TapoOuterClass.IntegerValueChange.newBuilder().setValue(it).setAbsolute(true)) }
+            temperature?.let { builder = builder.setTemperature(TapoOuterClass.IntegerValueChange.newBuilder().setValue(it).setAbsolute(true)) }
+            val response = connection.stub.set(builder.build())
+            return Info(response)
+        } catch (e: StatusException) {
+            Log.e("DeviceControl", "Error during power change for $name: $e")
+            return null
+        }
     }
 }

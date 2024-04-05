@@ -1,7 +1,5 @@
 package ch.wsb.tapoctl.service
 
-import android.app.PendingIntent
-import android.content.Intent
 import android.service.controls.Control
 import android.service.controls.ControlsProviderService
 import android.service.controls.actions.BooleanAction
@@ -9,15 +7,12 @@ import android.service.controls.actions.ControlAction
 import android.service.controls.actions.FloatAction
 import android.util.Log
 import ch.wsb.tapoctl.*
-import io.grpc.ManagedChannel
-import io.grpc.ManagedChannelBuilder
 import io.grpc.StatusException
 import io.reactivex.processors.ReplayProcessor
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.jdk9.asPublisher
 import kotlinx.coroutines.runBlocking
 import org.reactivestreams.FlowAdapters
-import tapo.TapoGrpcKt
 import tapo.TapoOuterClass
 import tapo.TapoOuterClass.HueSaturation
 import tapo.TapoOuterClass.IntegerValueChange
@@ -25,17 +20,14 @@ import java.util.concurrent.Flow
 import java.util.function.Consumer
 
 class TapoctlControlService : ControlsProviderService() {
-    private lateinit var channel: ManagedChannel;
-    private lateinit var stub: TapoGrpcKt.TapoCoroutineStub;
-    private lateinit var publisher: ReplayProcessor<Control>
-    private lateinit var pending: PendingIntent
-
-    private lateinit var eventThread: EventThread
     private lateinit var settings: Settings
+    private lateinit var connection: GrpcConnection
     private lateinit var devices: DeviceManager
+    private lateinit var publisher: ReplayProcessor<Control>
+    private lateinit var eventThread: EventThread
 
     override fun createPublisherForAllAvailable(): Flow.Publisher<Control> {
-        ensureServiceRunning(eventThread = false)
+        ensureServiceRunning(events = false)
         val publisher = flow {
             for ((_, ctrl) in devices.iterator()) {
                 if (ctrl.canControlBrightness()) emit(ctrl.getStatelessControl(DeviceControl.POWER_ID, "Power, Brightness"))
@@ -49,7 +41,7 @@ class TapoctlControlService : ControlsProviderService() {
     }
 
     override fun createPublisherFor(controlIds: MutableList<String>): Flow.Publisher<Control> {
-        ensureServiceRunning(eventThread = true)
+        ensureServiceRunning(events = true)
         runBlocking {
             for (compositeId in controlIds) {
                 val deviceId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[0]
@@ -62,7 +54,7 @@ class TapoctlControlService : ControlsProviderService() {
 
                 try {
                     val request = TapoOuterClass.DeviceRequest.newBuilder().setDevice(ctrl.name).build()
-                    val response = stub.info(request)
+                    val response = connection.stub.info(request)
 
                     val builder = when (controlId) {
                         DeviceControl.POWER_ID -> {
@@ -113,7 +105,7 @@ class TapoctlControlService : ControlsProviderService() {
         runBlocking {
             try {
                 val request = builder.build()
-                val info = stub.set(request)
+                val info = connection.stub.set(request)
 
                 val control = when (controlId) {
                     DeviceControl.POWER_ID -> {
@@ -138,53 +130,29 @@ class TapoctlControlService : ControlsProviderService() {
     override fun onCreate() {
         Log.i("Service", "Created")
         settings = Settings(baseContext.Datastore)
-        pending = PendingIntent.getActivity(baseContext, 1, Intent(), PendingIntent.FLAG_IMMUTABLE)
+        connection = GrpcConnection(settings)
+        devices = DeviceManager(connection, baseContext)
         publisher = ReplayProcessor.create()
-        ensureServiceRunning(eventThread = true)
+        ensureServiceRunning(events = true)
     }
 
     override fun onDestroy() {
         Log.i("Service", "Destroyed")
         if (::eventThread.isInitialized) eventThread.interrupt()
-        if (::channel.isInitialized) channel.shutdownNow()
+        connection.close()
     }
 
-    private fun ensureServiceRunning(eventThread: Boolean) {
-        if (::channel.isInitialized) channel.shutdownNow()
-        runBlocking {
-            setupGrpc()
-            devices = DeviceManager(stub, baseContext)
-            devices.fetchDevices()
-        }
-        if (eventThread) {
+    private fun ensureServiceRunning(events: Boolean) {
+        connection.reconnect()
+        runBlocking { devices.fetchDevices() }
+        if (events) {
             if (::eventThread.isInitialized) this.eventThread.interrupt()
             setupEventThread()
         }
     }
 
-    private suspend fun setupGrpc() {
-        try {
-            val address = settings.serverAddress.firstOrNull() ?: DEFAULT_SERVER_ADDRESS
-            val port = settings.serverPort.firstOrNull() ?: DEFAULT_SERVER_PORT
-            val protocol = settings.serverProtocol.firstOrNull() ?: DEFAULT_SERVER_PROTOCOL
-
-            val builder = ManagedChannelBuilder
-                .forAddress(address, port)
-                .enableRetry()
-                .maxRetryAttempts(5)
-
-            if (protocol == "https") builder.useTransportSecurity()
-            else builder.usePlaintext()
-
-            channel = builder.build()
-            stub = TapoGrpcKt.TapoCoroutineStub(channel)
-        } catch (e: StatusException) {
-            Log.e("SetupGrpc", e.toString())
-        }
-    }
-
     private fun setupEventThread() {
-        eventThread = EventThread(stub) { handleEvent(it) }
+        eventThread = EventThread(connection) { handleEvent(it) }
         eventThread.start()
     }
 

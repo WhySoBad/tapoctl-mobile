@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
 
 val SERVER_ADDRESS_KEY = stringPreferencesKey("server_address")
@@ -22,6 +23,8 @@ class Settings(private val dataStore: DataStore<Preferences>) {
     val serverPort = dataStore.data.map { p -> p[SERVER_PORT_KEY] ?: DEFAULT_SERVER_PORT }
 
     val serverProtocol = dataStore.data.map { p -> p[SERVER_PROTOCOL_KEY] ?: DEFAULT_SERVER_PROTOCOL }
+
+    val data = dataStore.data
 
     fun setServerAddress(address: String) {
         runBlocking {

@@ -1,15 +1,15 @@
 package ch.wsb.tapoctl.service
 
 import android.util.Log
+import ch.wsb.tapoctl.GrpcConnection
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.grpc.StatusException
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
+import io.reactivex.processors.ReplayProcessor
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.jdk9.asFlow
 import kotlinx.coroutines.runBlocking
-import tapo.TapoGrpcKt
+import org.reactivestreams.FlowAdapters
 import tapo.TapoOuterClass
 import java.nio.charset.StandardCharsets
 
@@ -18,7 +18,9 @@ sealed class Event {
     data class DeviceStateChanged(val info: Info) : Event()
 }
 
-class EventThread(private val stub: TapoGrpcKt.TapoCoroutineStub, private val callback: (event: Event) -> Unit) : Thread() {
+class EventThread(private val connection: GrpcConnection, private val callback: (event: Event) -> Unit = {}) : Thread() {
+    private val publisher = ReplayProcessor.create<Event>()
+
     override fun run() {
         Log.i("Event", "Starting event thread")
         try {
@@ -34,7 +36,8 @@ class EventThread(private val stub: TapoGrpcKt.TapoCoroutineStub, private val ca
     private suspend fun subscribeEvents() {
         try {
             val request = TapoOuterClass.EventRequest.newBuilder().build()
-            stub.events(request)
+            if (!connection.connected) connection.connect()
+            connection.stub.events(request)
                 .onStart { Log.i("Event", "Subscribed to events") }
                 .onCompletion { Log.i("Event", "Finished event subscription") }
                 .onEach { event ->
@@ -42,16 +45,20 @@ class EventThread(private val stub: TapoGrpcKt.TapoCoroutineStub, private val ca
                     when (event.type) {
                         TapoOuterClass.EventType.DeviceAuthChange -> {
                             Log.i("Event", "Received device auth state change event")
-                            val mapAdapter = Gson().getAdapter(object: TypeToken<Device>() {})
+                            val mapAdapter = Gson().getAdapter(object : TypeToken<Device>() {})
                             val device = mapAdapter.fromJson(body)
+                            publisher.onNext(Event.DeviceAuthChanged(device))
                             callback(Event.DeviceAuthChanged(device))
                         }
+
                         TapoOuterClass.EventType.DeviceStateChange -> {
                             Log.i("Event", "Received device state change event")
-                            val mapAdapter = Gson().getAdapter(object: TypeToken<Info>() {})
+                            val mapAdapter = Gson().getAdapter(object : TypeToken<Info>() {})
                             val info = mapAdapter.fromJson(body)
+                            publisher.onNext(Event.DeviceStateChanged(info))
                             callback(Event.DeviceStateChanged(info))
                         }
+
                         TapoOuterClass.EventType.UNRECOGNIZED -> TODO()
                     }
                 }
@@ -59,5 +66,9 @@ class EventThread(private val stub: TapoGrpcKt.TapoCoroutineStub, private val ca
         } catch (e: StatusException) {
             Log.w("Event", "Closed event stream: $e")
         }
+    }
+
+    fun getEvents(): Flow<Event> {
+        return FlowAdapters.toFlowPublisher(publisher).asFlow()
     }
 }
