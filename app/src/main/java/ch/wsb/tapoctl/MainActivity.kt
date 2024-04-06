@@ -9,12 +9,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -132,8 +134,6 @@ fun TapoctlApp(
         }.collect()
     }
 
-    // val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
-
     val backStackEntry by navController.currentBackStackEntryAsState()
     val view = backStackEntry?.destination?.route ?: "devices"
 
@@ -144,15 +144,11 @@ fun TapoctlApp(
         else -> ""
     }
 
-    // val fontSize = Typography.titleLarge.fontSize.times(1 - scrollBehavior.state.collapsedFraction.times(0.25f))
-
     Scaffold(
-        // modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             MediumTopAppBar(
-                title = { Text(title, style = Typography.titleLarge) },
-                // scrollBehavior = scrollBehavior,
+                title = {  Text(text = title, style = Typography.titleLarge) },
                 colors = TopAppBarDefaults.mediumTopAppBarColors(),
             )
         },

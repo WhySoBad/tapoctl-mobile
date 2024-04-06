@@ -1,15 +1,15 @@
 package ch.wsb.tapoctl.ui.views
 
-import android.util.Log
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
@@ -22,20 +22,22 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawStyle
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.toColor
 import ch.wsb.tapoctl.service.DeviceControl
 import ch.wsb.tapoctl.service.DeviceManager
 import ch.wsb.tapoctl.service.HueSaturation
 import ch.wsb.tapoctl.service.Info
+import ch.wsb.tapoctl.ui.common.CardWithTitle
+import ch.wsb.tapoctl.ui.common.ToggleButtonRow
 import ch.wsb.tapoctl.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalStdlibApi::class)
 @Composable
 fun SpecificDeviceView(
     device: DeviceControl,
@@ -61,12 +63,26 @@ fun SpecificDeviceView(
     var localBrightness by remember { mutableStateOf(info?.brightness) }
     var localHueSaturation by remember { mutableStateOf(info?.let { if (it.temperature == 0) HueSaturation(it.hue, it.saturation) else null }) }
     var localTemperature by remember { mutableStateOf(info?.let { if (it.temperature == 0) null else it.temperature }) }
+    var colorMode by remember { mutableStateOf(localTemperature != null) }
 
     LaunchedEffect(info) {
         localBrightness = info?.brightness
         localHueSaturation = info?.let { if (it.temperature == 0) HueSaturation(it.hue, it.saturation) else null }
         localTemperature = info?.let { if (it.temperature == 0) null else it.temperature }
+        colorMode = localTemperature == null
     }
+
+    val localColor = localHueSaturation?.let {
+        ColorUtils.HSLToColor(
+            floatArrayOf(
+                localHueSaturation?.hue?.toFloat()?.div(360) ?: 0f,
+                localHueSaturation?.saturation?.toFloat()?.div(100) ?: 0f,
+                localBrightness?.toFloat()?.div(100) ?: 0f
+            )
+        ).toColor().toArgb().toHexString(HexFormat.UpperCase)
+    }
+
+    val deviceRunning = info?.device_on ?: false
 
     Box(
         modifier = Modifier.pullRefresh(refreshState)
@@ -76,8 +92,30 @@ fun SpecificDeviceView(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                Card(
-                    // modifier = Modifier.padding(PaddingValues(16.dp))
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        scope.launch { device.setPower(deviceRunning.not()) }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (deviceRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                        contentColor = if (deviceRunning) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
+                    )
+                ) {
+                    Icon(
+                        Icons.Filled.PowerSettingsNew,
+                        contentDescription = "Toggle device power"
+                    )
+                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                    if (info != null) {
+                        Text(info.let { if (deviceRunning) "Turn device off" else "Turn device on" })
+                    }
+                }
+            }
+            item {
+                CardWithTitle(
+                    title = "Brightness",
+                    titleSuffix = localBrightness?.let { "$it%" }
                 ) {
                     BrightnessSlider(
                         brightness = localBrightness,
@@ -87,36 +125,32 @@ fun SpecificDeviceView(
                 }
             }
             item {
-                Card(
-                    // modifier = Modifier.padding(PaddingValues(16.dp))
-                ) {
-                    ColorTemperatureSlider(
-                        temperature = localTemperature,
-                        onChange = { localTemperature = it },
-                        onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
-                    )
-                }
+                ToggleButtonRow(
+                    value = colorMode,
+                    onChange = { colorMode = it },
+                    inactiveLabel = "Temperature",
+                    activeLabel = "Color",
+                )
             }
             item {
-                Card(
-                    // modifier = Modifier.padding(PaddingValues(16.dp))
+                CardWithTitle(
+                    title = if (colorMode) "Color" else "Temperature",
+                    titleSuffix = if (colorMode) localColor?.let { "#${it.substring(2)}" } else localTemperature?.let { "${it}K" }
                 ) {
-                    HueSaturationField(
-                        hue = localHueSaturation?.hue,
-                        saturation = localHueSaturation?.saturation,
-                        onChange = { localHueSaturation = it },
-                        onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
-                    )
-                }
-            }
-            item {
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        // TODO: Reset device
+                    if (colorMode) {
+                        HueSaturationField(
+                            hue = localHueSaturation?.hue,
+                            saturation = localHueSaturation?.saturation,
+                            onChange = { localHueSaturation = it },
+                            onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
+                        )
+                    } else {
+                        ColorTemperatureSlider(
+                            temperature = localTemperature,
+                            onChange = { localTemperature = it },
+                            onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
+                        )
                     }
-                ) {
-                    Text("Reset device")
                 }
             }
         }
@@ -137,15 +171,43 @@ fun BrightnessSlider(
     onChange: (Int) -> Unit,
     onChangeFinished: () -> Unit
 ) {
-    Slider(
-        value = brightness?.toFloat() ?: 1f,
-        onValueChange = { onChange(it.roundToInt()) },
-        onValueChangeFinished = { onChangeFinished() },
-        steps = 100,
-        valueRange = 1f..100f,
-        track = { FillableTrack(it) },
-        thumb = {}
-    )
+    CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+        Slider(
+            value = brightness?.toFloat() ?: 1f,
+            onValueChange = { onChange(it.roundToInt()) },
+            onValueChangeFinished = { onChangeFinished() },
+            steps = 100,
+            valueRange = 1f..100f,
+            track = {
+                val start = it.activeRange.start
+                val end = it.activeRange.endInclusive
+
+                val colorScheme = MaterialTheme.colorScheme
+
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(30.dp)
+                ) {
+                    val canvasHeight = size.height
+                    val canvasWidth = size.width
+                    drawRoundRect(
+                        topLeft = Offset(x = 0f, y = 0f),
+                        size = Size(canvasWidth, canvasHeight),
+                        color = colorScheme.onSurfaceVariant,
+                        cornerRadius = CornerRadius(8.dp.toPx())
+                    )
+                    drawRoundRect(
+                        topLeft = Offset(x = start * canvasWidth, y = 0f),
+                        size = Size(end * canvasWidth, canvasHeight),
+                        color = colorScheme.primary,
+                        cornerRadius = CornerRadius(8.dp.toPx())
+                    )
+                }
+            },
+            thumb = {}
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,89 +217,64 @@ fun ColorTemperatureSlider(
     onChange: (Int) -> Unit,
     onChangeFinished: () -> Unit
 ) {
-    Slider(
-        value = temperature?.toFloat() ?: 2500f,
-        onValueChange = { onChange(it.roundToInt()) },
-        onValueChangeFinished = { onChangeFinished() },
-        steps = 800,
-        valueRange = 2500f..6500f,
-        track = {
-            val brush = Brush.linearGradient(listOf(Temperature2500, Temperature3500, Temperature4500, Temperature5500, Temperature6500))
-            val start = it.activeRange.start
-            val end = it.activeRange.endInclusive
+    CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+        Slider(
+            modifier = Modifier.padding(0.dp),
+            value = temperature?.toFloat() ?: 2500f,
+            onValueChange = { onChange(it.roundToInt()) },
+            onValueChangeFinished = { onChangeFinished() },
+            steps = 800,
+            valueRange = 2500f..6500f,
+            track = {
+                val brush = Brush.linearGradient(listOf(Temperature2500, Temperature3500, Temperature4500, Temperature5500, Temperature6500))
+                val start = it.activeRange.start
+                val end = it.activeRange.endInclusive
 
-            val colorScheme = MaterialTheme.colorScheme
+                val colorScheme = MaterialTheme.colorScheme
 
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(30.dp)
-            ) {
-                val canvasHeight = size.height
-                val canvasWidth = size.width
-                val offsetX =
-                    if (end * canvasWidth + 5.dp.toPx() > canvasWidth) canvasWidth - 10.dp.toPx()
-                    else if(end * canvasWidth - 5.dp.toPx() < start * canvasWidth) start * canvasWidth
-                    else end * canvasWidth - 5.dp.toPx()
-
-                drawRoundRect(
-                    topLeft = Offset(x = 0f, y = 0f),
-                    size = Size(canvasWidth, canvasHeight),
-                    brush = brush,
-                    cornerRadius = CornerRadius(8.dp.toPx())
-                )
-                drawRoundRect(
-                    topLeft = Offset(x = start * canvasWidth, y = 0f),
-                    size = Size(end * canvasWidth, canvasHeight),
-                    cornerRadius = CornerRadius(8.dp.toPx()),
-                    color = Color.Unspecified
-                )
-                if(temperature != null) {
-                    drawRoundRect(
-                        topLeft = Offset(x = offsetX, y = 0f),
-                        size = Size(10.dp.toPx(), canvasHeight),
-                        cornerRadius = CornerRadius(8.dp.toPx()),
-                        color = Color.White
-                    )
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(0.dp)
+                        .height(30.dp)
+                ) {
+                    val canvasHeight = size.height
+                    val canvasWidth = size.width
+                    val offsetX =
+                        if (end * canvasWidth + 5.dp.toPx() > canvasWidth) canvasWidth - 10.dp.toPx()
+                        else if(end * canvasWidth - 5.dp.toPx() < start * canvasWidth) start * canvasWidth
+                        else end * canvasWidth - 5.dp.toPx()
 
                     drawRoundRect(
-                        topLeft = Offset(x = offsetX + 2.dp.toPx(), y = 2.dp.toPx()),
-                        size = Size(6.dp.toPx(), canvasHeight - 4.dp.toPx()),
-                        cornerRadius = CornerRadius(8.dp.toPx()),
-                        color = colorScheme.primary
+                        topLeft = Offset(x = 0f, y = 0f),
+                        size = Size(canvasWidth, canvasHeight),
+                        brush = brush,
+                        cornerRadius = CornerRadius(8.dp.toPx())
                     )
+                    drawRoundRect(
+                        topLeft = Offset(x = start * canvasWidth, y = 0f),
+                        size = Size(end * canvasWidth, canvasHeight),
+                        cornerRadius = CornerRadius(8.dp.toPx()),
+                        color = Color.Unspecified
+                    )
+                    if(temperature != null) {
+                        drawRoundRect(
+                            topLeft = Offset(x = offsetX, y = 0f),
+                            size = Size(10.dp.toPx(), canvasHeight),
+                            cornerRadius = CornerRadius(8.dp.toPx()),
+                            color = Color.White
+                        )
+
+                        drawRoundRect(
+                            topLeft = Offset(x = offsetX + 2.dp.toPx(), y = 2.dp.toPx()),
+                            size = Size(6.dp.toPx(), canvasHeight - 4.dp.toPx()),
+                            cornerRadius = CornerRadius(8.dp.toPx()),
+                            color = colorScheme.primary
+                        )
+                    }
                 }
-            }
-        },
-        thumb = {}
-    )
-}
-
-@Composable
-fun FillableTrack(positions: SliderPositions) {
-    val start = positions.activeRange.start
-    val end = positions.activeRange.endInclusive
-
-    val colorScheme = MaterialTheme.colorScheme
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(30.dp)
-    ) {
-        val canvasHeight = size.height
-        val canvasWidth = size.width
-        drawRoundRect(
-            topLeft = Offset(x = 0f, y = 0f),
-            size = Size(canvasWidth, canvasHeight),
-            color = colorScheme.onSurfaceVariant,
-            cornerRadius = CornerRadius(8.dp.toPx())
-        )
-        drawRoundRect(
-            topLeft = Offset(x = start * canvasWidth, y = 0f),
-            size = Size(end * canvasWidth, canvasHeight),
-            color = colorScheme.primary,
-            cornerRadius = CornerRadius(8.dp.toPx())
+            },
+            thumb = {}
         )
     }
 }
@@ -317,17 +354,19 @@ fun HueSaturationField(
         Canvas(
             modifier = canvasModifier
         ) {
-            drawRect(
+            drawRoundRect(
                 topLeft = Offset(x = 0f, y = 0f),
                 brush = Brush.linearGradient(
                     colors = gradientColorScaleHSL(),
                     start = Offset.Zero,
                     end = Offset(Float.POSITIVE_INFINITY, 0f)
-                )
+                ),
+                cornerRadius = CornerRadius(8.dp.toPx())
             )
-            drawRect(
+            drawRoundRect(
                 topLeft = Offset(x = 0f, y = 0f),
-                brush = transparentToGrayVerticalGradient()
+                brush = transparentToGrayVerticalGradient(),
+                cornerRadius = CornerRadius(8.dp.toPx())
             )
             if(showPosition) {
                 drawCircle(
