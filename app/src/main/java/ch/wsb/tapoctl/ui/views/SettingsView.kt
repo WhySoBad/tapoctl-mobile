@@ -7,10 +7,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import ch.wsb.tapoctl.*
 import ch.wsb.tapoctl.R
-import ch.wsb.tapoctl.ui.theme.Typography
+import ch.wsb.tapoctl.ui.common.CardWithTitle
+import ch.wsb.tapoctl.ui.common.Settings
 
 // The whole `SettingsView` is subject to change
 // It seems like there is no clean implementation of xml `PreferencesScreen` for
@@ -22,7 +21,7 @@ import ch.wsb.tapoctl.ui.theme.Typography
 fun SettingsView(settings: Settings) {
     var protocolOpen by remember { mutableStateOf(false) }
 
-    SettingsSection("Server") {
+    CardWithTitle("Server") {
         OutlinedTextField(
             label = { Text(stringResource(R.string.pref_server_address)) },
             value = settings.serverAddress.collectAsState("").value,
@@ -81,37 +80,6 @@ fun SettingsView(settings: Settings) {
                         protocolOpen = false
                     },
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsSection(
-    title: String,
-    children: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(PaddingValues(8.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(PaddingValues(12.dp))
-                .fillMaxWidth()
-        ) {
-            Text(
-                text = title,
-                style = Typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.padding(4.dp))
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                children()
             }
         }
     }

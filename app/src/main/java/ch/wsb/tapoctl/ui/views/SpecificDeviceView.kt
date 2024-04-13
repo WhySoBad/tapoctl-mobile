@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -26,10 +25,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColor
-import ch.wsb.tapoctl.service.DeviceControl
-import ch.wsb.tapoctl.service.DeviceManager
-import ch.wsb.tapoctl.service.HueSaturation
-import ch.wsb.tapoctl.service.Info
+import ch.wsb.tapoctl.tapoctl.DeviceControl
+import ch.wsb.tapoctl.tapoctl.DeviceManager
+import ch.wsb.tapoctl.tapoctl.HueSaturation
+import ch.wsb.tapoctl.tapoctl.Info
 import ch.wsb.tapoctl.ui.common.CardWithTitle
 import ch.wsb.tapoctl.ui.common.ToggleButtonRow
 import ch.wsb.tapoctl.ui.theme.*

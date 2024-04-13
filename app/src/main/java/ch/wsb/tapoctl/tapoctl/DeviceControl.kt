@@ -1,8 +1,9 @@
-package ch.wsb.tapoctl.service
+package ch.wsb.tapoctl.tapoctl
 
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.service.controls.Control
 import android.service.controls.Control.StatefulBuilder
 import android.service.controls.Control.StatelessBuilder
@@ -12,7 +13,7 @@ import android.service.controls.templates.RangeTemplate
 import android.service.controls.templates.ToggleRangeTemplate
 import android.service.controls.templates.ToggleTemplate
 import android.util.Log
-import ch.wsb.tapoctl.GrpcConnection
+import ch.wsb.tapoctl.DeviceActivity
 import io.grpc.StatusException
 import tapo.TapoOuterClass
 import tapo.TapoOuterClass.Device
@@ -62,8 +63,15 @@ class DeviceControl(private val device: Device, context: Context, private val co
 
     val capitalizedName =  device.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
 
-    private val intent: PendingIntent = PendingIntent.getActivity(context, 1, Intent(), PendingIntent.FLAG_IMMUTABLE)
+    private val intent: PendingIntent
     private val structure = capitalizedName
+
+    init {
+        val rawIntent = Intent(context, DeviceActivity::class.java)
+        rawIntent.putExtra("device", name)
+        val bundle = Bundle()
+        intent = PendingIntent.getActivity(context, 1, rawIntent, PendingIntent.FLAG_IMMUTABLE, bundle)
+    }
 
     private fun composeId(identifier: String): String {
         return createCompositeId(id, identifier)

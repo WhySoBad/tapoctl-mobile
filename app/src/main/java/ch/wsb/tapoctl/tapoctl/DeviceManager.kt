@@ -1,8 +1,7 @@
-package ch.wsb.tapoctl.service
+package ch.wsb.tapoctl.tapoctl
 
 import android.content.Context
 import android.util.Log
-import ch.wsb.tapoctl.GrpcConnection
 import io.grpc.StatusException
 import io.reactivex.processors.ReplayProcessor
 import kotlinx.coroutines.flow.Flow
@@ -11,7 +10,7 @@ import org.reactivestreams.FlowAdapters
 import tapo.TapoOuterClass
 
 class DeviceManager(private val connection: GrpcConnection, private val context: Context) {
-    private val devices = HashMap<String, DeviceControl>()
+    private var devices = HashMap<String, DeviceControl>()
     private val publisher = ReplayProcessor.create<List<DeviceControl>>()
 
     fun getDevices(): Flow<List<DeviceControl>> {
@@ -36,15 +35,17 @@ class DeviceManager(private val connection: GrpcConnection, private val context:
 
     suspend fun fetchDevices(): List<DeviceControl> {
         try {
-            devices.clear()
             if(!connection.connected) connection.connect()
             val devicesRequest = TapoOuterClass.Empty.newBuilder().build()
             val response = connection.stub.devices(devicesRequest)
+            val updated = HashMap<String, DeviceControl>()
             for (dev in response.devicesList) {
                 val ctrl = DeviceControl(dev, context, connection)
-                devices[ctrl.id] = ctrl
+                updated[ctrl.id] = ctrl
             }
+            devices = updated
         } catch (e: StatusException) {
+            devices.clear()
             Log.e("DeviceManager", e.toString())
         }
 

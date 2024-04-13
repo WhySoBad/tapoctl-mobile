@@ -1,4 +1,4 @@
-package ch.wsb.tapoctl
+package ch.wsb.tapoctl.ui.common
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
 
 val SERVER_ADDRESS_KEY = stringPreferencesKey("server_address")

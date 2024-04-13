@@ -1,4 +1,4 @@
-package ch.wsb.tapoctl.service
+package ch.wsb.tapoctl
 
 import android.service.controls.Control
 import android.service.controls.ControlsProviderService
@@ -6,12 +6,15 @@ import android.service.controls.actions.BooleanAction
 import android.service.controls.actions.ControlAction
 import android.service.controls.actions.FloatAction
 import android.util.Log
-import ch.wsb.tapoctl.*
+import ch.wsb.tapoctl.tapoctl.*
+import ch.wsb.tapoctl.ui.common.*
 import io.grpc.StatusException
 import io.reactivex.processors.ReplayProcessor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.jdk9.asPublisher
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import org.reactivestreams.FlowAdapters
 import tapo.TapoOuterClass
 import tapo.TapoOuterClass.HueSaturation
@@ -19,15 +22,18 @@ import tapo.TapoOuterClass.IntegerValueChange
 import java.util.concurrent.Flow
 import java.util.function.Consumer
 
-class TapoctlControlService : ControlsProviderService() {
+class TapoControlService : ControlsProviderService() {
     private lateinit var settings: Settings
     private lateinit var connection: GrpcConnection
     private lateinit var devices: DeviceManager
     private lateinit var publisher: ReplayProcessor<Control>
-    private lateinit var eventThread: EventThread
+    private lateinit var scope: CoroutineScope
+    private var eventHandler: EventHandler? = null
+
 
     override fun createPublisherForAllAvailable(): Flow.Publisher<Control> {
         ensureServiceRunning(events = false)
+
         val publisher = flow {
             for ((_, ctrl) in devices.iterator()) {
                 if (ctrl.canControlBrightness()) emit(ctrl.getStatelessControl(DeviceControl.POWER_ID, "Power, Brightness"))
@@ -42,7 +48,8 @@ class TapoctlControlService : ControlsProviderService() {
 
     override fun createPublisherFor(controlIds: MutableList<String>): Flow.Publisher<Control> {
         ensureServiceRunning(events = true)
-        runBlocking {
+
+        scope.launch {
             for (compositeId in controlIds) {
                 val deviceId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[0]
                 val controlId = compositeId.split(DEVICE_IDENTIFIER_SEPARATOR)[1]
@@ -70,9 +77,9 @@ class TapoctlControlService : ControlsProviderService() {
                     }
 
                     if (builder != null) publisher.onNext(builder.build())
-                    else Log.w("DeviceControl", "Control $controlId for $deviceId did not match any known control id")
+                    else Log.w("TapoControlService", "Control $controlId for $deviceId did not match any known control id")
                 } catch (e: StatusException) {
-                    Log.e("createPublisherFor", e.toString())
+                    Log.e("TapoControlService", e.toString())
                     publisher.onNext(DeviceControl.getUnavailableControl(deviceId, controlId, baseContext, Control.STATUS_ERROR))
                 }
             }
@@ -102,7 +109,7 @@ class TapoctlControlService : ControlsProviderService() {
             }
         }
 
-        runBlocking {
+        scope.launch {
             try {
                 val request = builder.build()
                 val info = connection.stub.set(request)
@@ -119,41 +126,39 @@ class TapoctlControlService : ControlsProviderService() {
 
                 consumer.accept(ControlAction.RESPONSE_OK)
                 if (control != null) publisher.onNext(control.build())
-                else Log.w("DeviceControl", "Control $controlId for $deviceId did not match any known control id")
+                else Log.w("TapoControlService", "Control $controlId for $deviceId did not match any known control id")
             } catch (e: StatusException) {
                 consumer.accept(ControlAction.RESPONSE_FAIL)
-                Log.e("DeviceControl", e.toString())
+                Log.e("TapoControlService", e.toString())
             }
         }
     }
 
     override fun onCreate() {
-        Log.i("Service", "Created")
+        Log.i("TapoControlService", "Created")
+        scope = MainScope()
         settings = Settings(baseContext.Datastore)
         connection = GrpcConnection(settings)
         devices = DeviceManager(connection, baseContext)
         publisher = ReplayProcessor.create()
+        eventHandler = EventHandler(connection, scope)
+        scope.launch {
+            eventHandler?.getEvents()?.onEach { handleEvent(it) }?.collect()
+        }
         ensureServiceRunning(events = true)
     }
 
     override fun onDestroy() {
-        Log.i("Service", "Destroyed")
-        if (::eventThread.isInitialized) eventThread.interrupt()
+        Log.i("TapoControlService", "Destroyed")
+        eventHandler?.unsubscribe()
         connection.close()
     }
 
     private fun ensureServiceRunning(events: Boolean) {
         connection.reconnect()
-        runBlocking { devices.fetchDevices() }
-        if (events) {
-            if (::eventThread.isInitialized) this.eventThread.interrupt()
-            setupEventThread()
-        }
-    }
-
-    private fun setupEventThread() {
-        eventThread = EventThread(connection) { handleEvent(it) }
-        eventThread.start()
+        if (events) eventHandler?.resubscribe()
+        // CHECK: Maybe this should be `runBlocking` since the following code could rely on the devices being fetched
+        scope.launch { devices.fetchDevices() }
     }
 
     private fun handleEvent(event: Event) {

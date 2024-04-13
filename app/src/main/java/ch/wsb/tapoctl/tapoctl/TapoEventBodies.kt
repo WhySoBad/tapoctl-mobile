@@ -1,4 +1,4 @@
-package ch.wsb.tapoctl.service
+package ch.wsb.tapoctl.tapoctl
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
