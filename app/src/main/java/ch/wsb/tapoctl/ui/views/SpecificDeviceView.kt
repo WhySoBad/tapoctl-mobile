@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PowerSettingsNew
@@ -16,13 +17,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColor
 import ch.wsb.tapoctl.tapoctl.DeviceControl
@@ -30,13 +36,13 @@ import ch.wsb.tapoctl.tapoctl.DeviceManager
 import ch.wsb.tapoctl.tapoctl.HueSaturation
 import ch.wsb.tapoctl.tapoctl.Info
 import ch.wsb.tapoctl.ui.common.CardWithTitle
-import ch.wsb.tapoctl.ui.common.ToggleButtonRow
+import ch.wsb.tapoctl.ui.common.ToggleButtonTabs
 import ch.wsb.tapoctl.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalStdlibApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalStdlibApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SpecificDeviceView(
     device: DeviceControl,
@@ -91,23 +97,26 @@ fun SpecificDeviceView(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        scope.launch { device.setPower(deviceRunning.not()) }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (deviceRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                        contentColor = if (deviceRunning) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
-                    )
-                ) {
-                    Icon(
-                        Icons.Filled.PowerSettingsNew,
-                        contentDescription = "Toggle device power"
-                    )
-                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                    if (info != null) {
-                        Text(info.let { if (deviceRunning) "Turn device off" else "Turn device on" })
+                CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        onClick = {
+                            scope.launch { device.setPower(deviceRunning.not()) }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (deviceRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                            contentColor = if (deviceRunning) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.PowerSettingsNew,
+                            contentDescription = "Toggle device power"
+                        )
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        if (info != null) {
+                            Text(info.let { if (deviceRunning) "Turn device off" else "Turn device on" })
+                        }
                     }
                 }
             }
@@ -124,33 +133,52 @@ fun SpecificDeviceView(
                 }
             }
             item {
-                ToggleButtonRow(
-                    value = colorMode,
-                    onChange = { colorMode = it },
-                    inactiveLabel = "Temperature",
-                    activeLabel = "Color",
-                )
-            }
-            item {
-                CardWithTitle(
-                    title = if (colorMode) "Color" else "Temperature",
-                    titleSuffix = if (colorMode) localColor?.let { "#${it.substring(2)}" } else localTemperature?.let { "${it}K" }
-                ) {
-                    if (colorMode) {
-                        HueSaturationField(
-                            hue = localHueSaturation?.hue,
-                            saturation = localHueSaturation?.saturation,
-                            onChange = { localHueSaturation = it },
-                            onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
-                        )
-                    } else {
-                        ColorTemperatureSlider(
-                            temperature = localTemperature,
-                            onChange = { localTemperature = it },
-                            onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
-                        )
+                Card {
+                    ToggleButtonTabs(
+                        value = colorMode,
+                        onChange = { colorMode = it },
+                        inactiveLabel = "Temperature",
+                        activeLabel = "Color",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(PaddingValues(
+                                top = 8.dp,
+                                end = 16.dp,
+                                start = 16.dp,
+                                bottom = 16.dp
+                            ))
+                            .fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                val text = if (colorMode) localColor?.let { "#${it.substring(2)}" } else localTemperature?.let { "${it}K" }
+                                text?.let { Text(it, style = Typography.titleSmall) }
+                            }
+                            if (colorMode) {
+                                HueSaturationField(
+                                    hue = localHueSaturation?.hue,
+                                    saturation = localHueSaturation?.saturation,
+                                    onChange = { localHueSaturation = it },
+                                    onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
+                                )
+                            } else {
+                                ColorTemperatureSlider(
+                                    temperature = localTemperature,
+                                    onChange = { localTemperature = it },
+                                    onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
+                                )
+                            }
+                        }
                     }
                 }
+
             }
         }
         PullRefreshIndicator(
@@ -185,8 +213,13 @@ fun BrightnessSlider(
 
                 Canvas(
                     modifier = Modifier
-                        .fillMaxWidth()
                         .height(30.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints.offset(24.dp.roundToPx()))
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
                 ) {
                     val canvasHeight = size.height
                     val canvasWidth = size.width
@@ -233,9 +266,12 @@ fun ColorTemperatureSlider(
 
                 Canvas(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(0.dp)
                         .height(30.dp)
+                        .fillMaxWidth()
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints.offset(24.dp.roundToPx()))
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
                 ) {
                     val canvasHeight = size.height
                     val canvasWidth = size.width

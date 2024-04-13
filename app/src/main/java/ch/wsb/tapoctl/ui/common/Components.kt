@@ -68,7 +68,7 @@ fun CardWithTitle(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ToggleButtonRow(
+fun ToggleButtonTabs(
     value: Boolean,
     activeLabel: String,
     inactiveLabel: String,
@@ -85,7 +85,7 @@ fun ToggleButtonRow(
                     shape = RoundedCornerShape(
                         topStart = 12.dp,
                         topEnd = 0.dp,
-                        bottomStart = 12.dp,
+                        bottomStart = 0.dp,
                         bottomEnd = 0.dp
                     ),
                     colors = ButtonDefaults.buttonColors(
@@ -105,12 +105,12 @@ fun ToggleButtonRow(
                         topStart = 0.dp,
                         topEnd = 12.dp,
                         bottomStart = 0.dp,
-                        bottomEnd = 12.dp
+                        bottomEnd = 0.dp
                     ),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                         contentColor = if (value) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
-                    )
+                    ),
                 ) {
                     Text(
                         text = activeLabel,
