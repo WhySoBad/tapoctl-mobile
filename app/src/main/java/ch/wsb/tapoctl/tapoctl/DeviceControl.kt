@@ -23,7 +23,7 @@ import java.util.*
 // random-ish separator which must not be contained in any device name
 const val DEVICE_IDENTIFIER_SEPARATOR: String = "[]_!_(&)"
 
-class DeviceControl(private val device: Device, context: Context, private val connection: GrpcConnection) {
+class DeviceControl(private val device: Device, private val context: Context, private val connection: GrpcConnection) {
     companion object {
         private val COLORED_LIGHT_BULBS = listOf("L530", "L630", "L900")
         private val LIGHT_BULBS = listOf("L510", "L520", "L610")
@@ -63,22 +63,22 @@ class DeviceControl(private val device: Device, context: Context, private val co
 
     val capitalizedName =  device.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
 
-    private val intent: PendingIntent
     private val structure = capitalizedName
 
-    init {
-        val rawIntent = Intent(context, DeviceActivity::class.java)
-        rawIntent.putExtra("device", name)
-        val bundle = Bundle()
-        intent = PendingIntent.getActivity(context, 1, rawIntent, PendingIntent.FLAG_IMMUTABLE, bundle)
+    private fun composeId(identifier: String): String {
+        return createCompositeId(device.name, identifier)
     }
 
-    private fun composeId(identifier: String): String {
-        return createCompositeId(id, identifier)
+    private fun getIndent(): PendingIntent {
+        val rawIntent = Intent(context, DeviceActivity::class.java)
+        rawIntent.putExtra("ch.wsb.tapoctl.device", name)
+        val bundle = Bundle()
+        // use device hash code as channel since each device has to use a different channel since the intents wouldn't be viewed as unequal by the filter method
+        return PendingIntent.getActivity(context, device.hashCode(), rawIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT, bundle)
     }
 
     fun getStatelessControl(id: String, title: String): Control {
-        return StatelessBuilder(composeId(id), intent)
+        return StatelessBuilder(composeId(id), getIndent())
             .setDeviceType(DeviceTypes.TYPE_LIGHT)
             .setTitle(title)
             .setSubtitle(device.type)
@@ -91,7 +91,7 @@ class DeviceControl(private val device: Device, context: Context, private val co
         val invalid = temperature < 2500 || temperature > 6500f
         val rangeTemplate = RangeTemplate(composeId(TEMPERATURE_ID), 2500f, 6500f, temperature.toFloat().coerceIn(2500f, 6500f), 5f, "%.0fK")
 
-        return StatefulBuilder(composeId(TEMPERATURE_ID), intent)
+        return StatefulBuilder(composeId(TEMPERATURE_ID), getIndent())
             .setDeviceType(DeviceTypes.TYPE_LIGHT)
             .setControlTemplate(rangeTemplate)
             .setStatus(Control.STATUS_OK)
@@ -106,7 +106,7 @@ class DeviceControl(private val device: Device, context: Context, private val co
         val rangeTemplate = RangeTemplate(composeId(BRIGHTNESS_ID), 1f, 100f, brightness.toFloat().coerceIn(1f, 100f), 1f, "%.0f%%")
         val toggleTemplate = ControlButton(power, "Toggle the device power state")
 
-        return StatefulBuilder(composeId(POWER_ID), intent)
+        return StatefulBuilder(composeId(POWER_ID), getIndent())
             .setDeviceType(DeviceTypes.TYPE_LIGHT)
             .setControlTemplate(ToggleRangeTemplate(composeId(POWER_ID), toggleTemplate, rangeTemplate))
             .setStatus(Control.STATUS_OK)
@@ -118,7 +118,7 @@ class DeviceControl(private val device: Device, context: Context, private val co
     fun getPowerControl(power: Boolean): StatefulBuilder {
         val toggleTemplate = ControlButton(power, "Toggle the device power state")
 
-        return StatefulBuilder(composeId(POWER_ID), intent)
+        return StatefulBuilder(composeId(POWER_ID), getIndent())
             .setDeviceType(DeviceTypes.TYPE_LIGHT)
             .setControlTemplate(ToggleTemplate(composeId(POWER_ID), toggleTemplate))
             .setStatus(Control.STATUS_OK)
@@ -132,7 +132,7 @@ class DeviceControl(private val device: Device, context: Context, private val co
         val invalid = hue < 1 || hue > 360
         val rangeTemplate = RangeTemplate(composeId(HUE_ID), 1f, 360f, hue.toFloat().coerceIn(1f, 360f), 1f, "%.0f")
 
-        return StatefulBuilder(composeId(HUE_ID), intent)
+        return StatefulBuilder(composeId(HUE_ID), getIndent())
             .setDeviceType(DeviceTypes.TYPE_LIGHT)
             .setControlTemplate(rangeTemplate)
             .setStatus(Control.STATUS_OK)

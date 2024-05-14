@@ -15,6 +15,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.jdk9.asPublisher
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.reactivestreams.FlowAdapters
 import tapo.TapoOuterClass
 import tapo.TapoOuterClass.HueSaturation
@@ -157,8 +158,7 @@ class TapoControlService : ControlsProviderService() {
     private fun ensureServiceRunning(events: Boolean) {
         connection.reconnect()
         if (events) eventHandler?.resubscribe()
-        // CHECK: Maybe this should be `runBlocking` since the following code could rely on the devices being fetched
-        scope.launch { devices.fetchDevices() }
+        runBlocking { devices.fetchDevices() }
     }
 
     private fun handleEvent(event: Event) {
@@ -175,9 +175,9 @@ class TapoControlService : ControlsProviderService() {
                 if (device.status === TapoOuterClass.SessionStatus.Authenticated) {
                     // TODO: Update with current device info
                 } else {
-                    publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.POWER_ID, baseContext, Control.STATUS_ERROR))
                     if (ctrl.canControlTemperature()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.TEMPERATURE_ID, baseContext, Control.STATUS_ERROR))
-                    if (ctrl.canControlColor()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.HUE_ID, baseContext, Control.STATUS_ERROR))
+                    else if (ctrl.canControlColor()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.HUE_ID, baseContext, Control.STATUS_ERROR))
+                    else publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.POWER_ID, baseContext, Control.STATUS_ERROR))
                 }
             }
             is Event.DeviceStateChanged -> {

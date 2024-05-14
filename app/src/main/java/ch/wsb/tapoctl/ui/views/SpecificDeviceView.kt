@@ -23,14 +23,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColor
+import ch.wsb.tapoctl.R
 import ch.wsb.tapoctl.tapoctl.DeviceControl
 import ch.wsb.tapoctl.tapoctl.DeviceManager
 import ch.wsb.tapoctl.tapoctl.HueSaturation
@@ -47,6 +47,7 @@ import kotlin.math.roundToInt
 fun SpecificDeviceView(
     device: DeviceControl,
     devices: DeviceManager,
+    // TODO: Show error on specific device view
     error: Boolean,
     info: Info?,
     onInfoRequest: () -> Unit
@@ -111,74 +112,78 @@ fun SpecificDeviceView(
                     ) {
                         Icon(
                             Icons.Filled.PowerSettingsNew,
-                            contentDescription = "Toggle device power"
+                            contentDescription = stringResource(R.string.device_toggle_power)
                         )
                         Spacer(modifier = Modifier.padding(horizontal = 4.dp))
                         if (info != null) {
-                            Text(info.let { if (deviceRunning) "Turn device off" else "Turn device on" })
+                            Text(info.let { if (deviceRunning) stringResource(R.string.device_off) else stringResource(R.string.device_on) })
                         }
                     }
                 }
             }
-            item {
-                CardWithTitle(
-                    title = "Brightness",
-                    titleSuffix = localBrightness?.let { "$it%" }
-                ) {
-                    BrightnessSlider(
-                        brightness = localBrightness,
-                        onChange =  { localBrightness = it },
-                        onChangeFinished = { scope.launch { device.set(brightness = localBrightness) }  }
-                    )
-                }
-            }
-            item {
-                Card {
-                    ToggleButtonTabs(
-                        value = colorMode,
-                        onChange = { colorMode = it },
-                        inactiveLabel = "Temperature",
-                        activeLabel = "Color",
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(PaddingValues(
-                                top = 8.dp,
-                                end = 16.dp,
-                                start = 16.dp,
-                                bottom = 16.dp
-                            ))
-                            .fillMaxWidth()
+            device.canControlBrightness().let {
+                item {
+                    CardWithTitle(
+                        title = stringResource(R.string.device_brightness),
+                        titleSuffix = localBrightness?.let { "$it%" }
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        BrightnessSlider(
+                            brightness = localBrightness,
+                            onChange =  { localBrightness = it },
+                            onChangeFinished = { scope.launch { device.set(brightness = localBrightness) }  }
+                        )
+                    }
+                }
+            }
+            device.canControlColor().let {
+                item {
+                    Card {
+                        ToggleButtonTabs(
+                            value = colorMode,
+                            onChange = { colorMode = it },
+                            inactiveLabel = stringResource(R.string.device_temperature),
+                            activeLabel = stringResource(R.string.device_color),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(PaddingValues(
+                                    top = 8.dp,
+                                    end = 16.dp,
+                                    start = 16.dp,
+                                    bottom = 16.dp
+                                ))
+                                .fillMaxWidth()
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                val text = if (colorMode) localColor?.let { "#${it.substring(2)}" } else localTemperature?.let { "${it}K" }
-                                text?.let { Text(it, style = Typography.titleSmall) }
-                            }
-                            if (colorMode) {
-                                HueSaturationField(
-                                    hue = localHueSaturation?.hue,
-                                    saturation = localHueSaturation?.saturation,
-                                    onChange = { localHueSaturation = it },
-                                    onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
-                                )
-                            } else {
-                                ColorTemperatureSlider(
-                                    temperature = localTemperature,
-                                    onChange = { localTemperature = it },
-                                    onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    val text = if (colorMode) localColor?.let { "#${it.substring(2)}" } else localTemperature?.let { "${it}K" }
+                                    text?.let { Text(it, style = Typography.titleSmall) }
+                                }
+                                if (colorMode) {
+                                    HueSaturationField(
+                                        hue = localHueSaturation?.hue,
+                                        saturation = localHueSaturation?.saturation,
+                                        onChange = { localHueSaturation = it },
+                                        onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
+                                    )
+                                } else {
+                                    ColorTemperatureSlider(
+                                        temperature = localTemperature,
+                                        onChange = { localTemperature = it },
+                                        onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
+                }
             }
         }
         PullRefreshIndicator(
@@ -256,6 +261,7 @@ fun ColorTemperatureSlider(
             onValueChange = { onChange(it.roundToInt()) },
             onValueChangeFinished = { onChangeFinished() },
             steps = 800,
+            // TODO: Check whether all devices only have this range or whether this is specific to the L530
             valueRange = 2500f..6500f,
             track = {
                 val brush = Brush.linearGradient(listOf(Temperature2500, Temperature3500, Temperature4500, Temperature5500, Temperature6500))

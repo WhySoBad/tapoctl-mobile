@@ -53,8 +53,8 @@ fun AppWrapper(
                 } else {
                     scope.launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Unable to get device info",
-                            actionLabel = "Retry"
+                            message = context.getString(R.string.error_device_info),
+                            actionLabel = context.getString(R.string.action_retry)
                         )
                         when (result) {
                             SnackbarResult.ActionPerformed -> {
@@ -69,7 +69,7 @@ fun AppWrapper(
                     }
                 }
             } else {
-                scope.launch { snackbarHostState.showSnackbar("Device $deviceId not found") }
+                scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_device_not_found, deviceId)) }
             }
         }
     }
@@ -94,8 +94,8 @@ fun AppWrapper(
                     deviceErrors[it.device.name] = true;
                     scope.launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Invalid device session",
-                            actionLabel = "Refresh"
+                            message = context.getString(R.string.error_invalid_session),
+                            actionLabel = context.getString(R.string.action_refresh)
                         )
                         when (result) {
                             SnackbarResult.ActionPerformed -> fetchDeviceInfo(it.device.name)

@@ -126,12 +126,12 @@ fun TapoctlApp(
                     composable("device/{device}") { entry ->
                         val deviceName = entry.arguments?.getString("device")
                         if (deviceName == null) {
-                            scope.launch { snackbarHostState.showSnackbar("Navigated to unknown device") }
+                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_unknown_device)) }
                             navController.navigate("devices")
                         } else {
                             val device = devices.get(deviceName)
                             if (device == null) {
-                                scope.launch { snackbarHostState.showSnackbar("Device $deviceName not found") }
+                                scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_device_not_found, deviceName)) }
                                 navController.navigate("devices")
                             } else {
                                 SpecificDeviceView(

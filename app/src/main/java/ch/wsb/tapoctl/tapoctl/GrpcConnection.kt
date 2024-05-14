@@ -11,6 +11,7 @@ import io.grpc.StatusException
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import tapo.TapoGrpcKt
+import java.util.concurrent.TimeUnit
 
 class GrpcConnection(private val settings: Settings) {
     private var channel: ManagedChannel? = null
@@ -64,6 +65,7 @@ class GrpcConnection(private val settings: Settings) {
      */
     fun close() {
         channel?.shutdownNow()
+        channel?.awaitTermination(2, TimeUnit.SECONDS)
         connected = false
     }
 }

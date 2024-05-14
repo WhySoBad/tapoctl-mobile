@@ -11,4 +11,16 @@
     <string name="pref_server_port_desc">The port on which the tapoctl server is served</string>
     <string name="pref_server_protocol">Protocol</string>
     <string name="pref_server_protocol_desc">The protocol used to connect to the server</string>
+    <string name="device_toggle_power">Toggle device power</string>
+    <string name="device_off">Turn device off</string>
+    <string name="device_on">Turn device on</string>
+    <string name="device_temperature">Temperature</string>
+    <string name="device_brightness">Brightness</string>
+    <string name="device_color">Color</string>
+    <string name="error_device_info">Unable to get device info</string>
+    <string name="error_invalid_session">Invalid device session</string>
+    <string name="error_device_not_found">Device %1$s not found</string>
+    <string name="error_unknown_device">Navigated to unknown device</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_refresh">Refresh</string>
 </resources>

@@ -27,7 +27,7 @@ class DeviceActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         settings = Settings(baseContext.Datastore)
 
-        val deviceName = intent.extras?.getString("device")
+        val deviceName = intent.extras?.getString("ch.wsb.tapoctl.device")
 
         setContent {
             TapoctlTheme {
@@ -44,7 +44,7 @@ fun DeviceActivityApp(
     settings: Settings,
     deviceId: String
 ) {
-    AppWrapper(context = context, settings = settings) { scope, _, devices, _, snackbarHostState, infos, errors, fetchDeviceInfo ->
+    AppWrapper(context = context, settings = settings) { _, _, devices, _, _, infos, errors, fetchDeviceInfo ->
         val device = devices.get(deviceId)
         val info = infos[deviceId]
         val error = errors[deviceId] ?: false
@@ -58,11 +58,11 @@ fun DeviceActivityApp(
                 ) {
                     if (device != null) {
                         Text(
-                            text = device!!.capitalizedName,
+                            text = device.capitalizedName,
                             style = Typography.titleLarge
                         )
                         SpecificDeviceView(
-                            device = device!!,
+                            device = device,
                             devices = devices,
                             onInfoRequest = { fetchDeviceInfo(deviceId) },
                             info = info,
