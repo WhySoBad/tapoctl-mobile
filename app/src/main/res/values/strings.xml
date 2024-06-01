@@ -21,6 +21,7 @@
     <string name="error_invalid_session">Invalid device session</string>
     <string name="error_device_not_found">Device %1$s not found</string>
     <string name="error_unknown_device">Navigated to unknown device</string>
+    <string name="error_grpc_not_connected">Server is not connected. Verify your server address and the server is up and running!</string>
     <string name="action_retry">Retry</string>
     <string name="action_refresh">Refresh</string>
 </resources>

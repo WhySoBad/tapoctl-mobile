@@ -2,6 +2,7 @@ package ch.wsb.tapoctl.tapoctl
 
 import android.content.Context
 import android.util.Log
+import ch.wsb.tapoctl.GrpcNotConnectedException
 import io.grpc.StatusException
 import io.reactivex.processors.ReplayProcessor
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ class DeviceManager(private val connection: GrpcConnection, private val context:
         return devices.keys.contains(deviceId)
     }
 
+    @Throws(GrpcNotConnectedException::class)
     suspend fun fetchDevices(): List<DeviceControl> {
         try {
             if(!connection.connected) connection.connect()

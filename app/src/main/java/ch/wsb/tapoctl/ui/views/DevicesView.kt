@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import ch.wsb.tapoctl.GrpcNotConnectedException
 import ch.wsb.tapoctl.tapoctl.DeviceControl
 import ch.wsb.tapoctl.tapoctl.DeviceManager
 import ch.wsb.tapoctl.tapoctl.Info
@@ -171,7 +172,15 @@ fun DeviceCard(
                         }
                     }
                     FilledIconButton(
-                        onClick = { scope.launch { device.setPower(info?.device_on?.not() ?: false) }},
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    device.setPower(info?.device_on?.not() ?: false)
+                                } catch (e: GrpcNotConnectedException) {
+                                    // TODO: Add snackbar or similar to indicate the error
+                                }
+                            }
+                        },
                         content = {
                             if (error) {
                                 Icon(

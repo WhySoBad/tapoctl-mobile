@@ -156,9 +156,13 @@ class TapoControlService : ControlsProviderService() {
     }
 
     private fun ensureServiceRunning(events: Boolean) {
-        connection.reconnect()
-        if (events) eventHandler?.resubscribe()
-        runBlocking { devices.fetchDevices() }
+        try {
+            connection.reconnect()
+            if (events) eventHandler?.resubscribe()
+            runBlocking { devices.fetchDevices() }
+        } catch (e: GrpcNotConnectedException) {
+            Log.e("TapoControlService", "Cannot ensure all services running since grpc is not connected")
+        }
     }
 
     private fun handleEvent(event: Event) {

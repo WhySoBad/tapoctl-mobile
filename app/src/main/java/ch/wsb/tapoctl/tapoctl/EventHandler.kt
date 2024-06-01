@@ -1,6 +1,7 @@
 package ch.wsb.tapoctl.tapoctl
 
 import android.util.Log
+import ch.wsb.tapoctl.GrpcNotConnectedException
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.grpc.StatusException
@@ -51,11 +52,17 @@ class EventHandler(private val connection: GrpcConnection, private val scope: Co
                             TapoOuterClass.EventType.UNRECOGNIZED -> TODO()
                         }
                     }
+                    .catch { e ->
+                        Log.e("Event", "Received exception: ${e.localizedMessage}")
+                    }
                     .collect()
             } catch (e: StatusException) {
                 Log.w("Event", "Closed event stream: $e")
+            } catch (e: GrpcNotConnectedException) {
+                Log.e("Event", "Grpc connection not connected")
             }
         }
+
         return getEvents()
     }
 
@@ -65,7 +72,7 @@ class EventHandler(private val connection: GrpcConnection, private val scope: Co
     }
 
     fun unsubscribe() {
-        job?.cancel()
+        if (job?.isActive == true) job?.cancel()
         job = null
     }
 

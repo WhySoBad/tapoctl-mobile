@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColor
+import ch.wsb.tapoctl.GrpcNotConnectedException
 import ch.wsb.tapoctl.R
 import ch.wsb.tapoctl.tapoctl.DeviceControl
 import ch.wsb.tapoctl.tapoctl.DeviceManager
@@ -103,7 +104,13 @@ fun SpecificDeviceView(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         onClick = {
-                            scope.launch { device.setPower(deviceRunning.not()) }
+                            scope.launch {
+                                try {
+                                    device.setPower(deviceRunning.not())
+                                } catch (e: GrpcNotConnectedException) {
+                                    // TODO: Add snackbar or similar to indicate the error
+                                }
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (deviceRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
@@ -130,7 +137,15 @@ fun SpecificDeviceView(
                         BrightnessSlider(
                             brightness = localBrightness,
                             onChange =  { localBrightness = it },
-                            onChangeFinished = { scope.launch { device.set(brightness = localBrightness) }  }
+                            onChangeFinished = {
+                                scope.launch {
+                                    try {
+                                        device.set(brightness = localBrightness)
+                                    } catch (e: GrpcNotConnectedException) {
+                                        // TODO: Add snackbar or similar to indicate the error
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -170,13 +185,29 @@ fun SpecificDeviceView(
                                         hue = localHueSaturation?.hue,
                                         saturation = localHueSaturation?.saturation,
                                         onChange = { localHueSaturation = it },
-                                        onChangeFinished = { scope.launch { device.set(hueSaturation = localHueSaturation?.toGrpcObject()) } }
+                                        onChangeFinished = {
+                                            scope.launch {
+                                                try {
+                                                    device.set(hueSaturation = localHueSaturation?.toGrpcObject())
+                                                } catch (e: GrpcNotConnectedException) {
+                                                    // TODO: Add snackbar or similar to indicate the error
+                                                }
+                                            }
+                                        }
                                     )
                                 } else {
                                     ColorTemperatureSlider(
                                         temperature = localTemperature,
                                         onChange = { localTemperature = it },
-                                        onChangeFinished = { scope.launch { device.set(temperature = localTemperature) } }
+                                        onChangeFinished = {
+                                            scope.launch {
+                                                try {
+                                                    device.set(temperature = localTemperature)
+                                                } catch (e: GrpcNotConnectedException) {
+                                                    // TODO: Add snackbar or similar to indicate the error
+                                                }
+                                            }
+                                        }
                                     )
                                 }
                             }

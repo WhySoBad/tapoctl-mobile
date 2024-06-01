@@ -46,27 +46,31 @@ fun AppWrapper(
         scope.launch {
             val device = devices.get(deviceId)
             if (device != null) {
-                val info = device.getInfo()
-                if (info != null) {
-                    deviceInfos[device.name] = info
-                    deviceErrors[device.name] = false
-                } else {
-                    scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.error_device_info),
-                            actionLabel = context.getString(R.string.action_retry)
-                        )
-                        when (result) {
-                            SnackbarResult.ActionPerformed -> {
-                                val info = device.getInfo()
-                                if (info != null) {
-                                    deviceInfos[device.name] = info
-                                    deviceErrors[device.name] = false
-                                } else deviceErrors[device.name] = true
+                try {
+                    val info = device.getInfo()
+                    if (info != null) {
+                        deviceInfos[device.name] = info
+                        deviceErrors[device.name] = false
+                    } else {
+                        scope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = context.getString(R.string.error_device_info),
+                                actionLabel = context.getString(R.string.action_retry)
+                            )
+                            when (result) {
+                                SnackbarResult.ActionPerformed -> {
+                                    val info = device.getInfo()
+                                    if (info != null) {
+                                        deviceInfos[device.name] = info
+                                        deviceErrors[device.name] = false
+                                    } else deviceErrors[device.name] = true
+                                }
+                                SnackbarResult.Dismissed -> deviceErrors[device.name] = true
                             }
-                            SnackbarResult.Dismissed -> deviceErrors[device.name] = true
                         }
                     }
+                } catch (e: GrpcNotConnectedException) {
+                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_grpc_not_connected)) }
                 }
             } else {
                 scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_device_not_found, deviceId)) }
@@ -76,12 +80,16 @@ fun AppWrapper(
 
     LaunchedEffect(Unit) {
         // update gRPC connection on every settings change
-        settings.data.onEach {
-            connection.reconnect()
-            devices.fetchDevices()
-            devices.iterator().forEach { scope.launch { fetchDeviceInfo(it.key) } }
-            eventHandler.resubscribe()
-        }.collect()
+        try {
+            settings.data.onEach {
+                connection.reconnect()
+                devices.fetchDevices()
+                devices.iterator().forEach { scope.launch { fetchDeviceInfo(it.key) } }
+                eventHandler.resubscribe()
+            }.collect()
+        } catch (e: GrpcNotConnectedException) {
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_grpc_not_connected)) }
+        }
     }
 
     LaunchedEffect(Unit) {

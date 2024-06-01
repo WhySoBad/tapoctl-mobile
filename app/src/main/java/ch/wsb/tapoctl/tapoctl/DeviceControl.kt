@@ -14,6 +14,7 @@ import android.service.controls.templates.ToggleRangeTemplate
 import android.service.controls.templates.ToggleTemplate
 import android.util.Log
 import ch.wsb.tapoctl.DeviceActivity
+import ch.wsb.tapoctl.GrpcNotConnectedException
 import io.grpc.StatusException
 import tapo.TapoOuterClass
 import tapo.TapoOuterClass.Device
@@ -169,6 +170,7 @@ class DeviceControl(private val device: Device, private val context: Context, pr
         return isColorLightBulb() || isNormalLightBulb()
     }
 
+    @Throws(GrpcNotConnectedException::class)
     suspend fun getInfo(): Info? {
         try {
             if (!connection.connected) connection.connect()
@@ -181,6 +183,7 @@ class DeviceControl(private val device: Device, private val context: Context, pr
         }
     }
 
+    @Throws(GrpcNotConnectedException::class)
     suspend fun setPower(power: Boolean): TapoOuterClass.PowerResponse? {
         try {
             if (!connection.connected) connection.connect()
@@ -193,6 +196,7 @@ class DeviceControl(private val device: Device, private val context: Context, pr
         }
     }
 
+    @Throws(GrpcNotConnectedException::class)
     suspend fun set(power: Boolean? = null, hueSaturation: HueSaturation? = null, brightness: Int? = null, temperature: Int? = null): Info? {
         try {
             if (!connection.connected) connection.connect()
