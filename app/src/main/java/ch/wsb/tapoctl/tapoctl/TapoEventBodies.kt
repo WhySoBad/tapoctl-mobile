@@ -4,7 +4,6 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import tapo.TapoOuterClass
 import tapo.TapoOuterClass.IntegerValueChange
-import tapo.TapoOuterClass.SessionStatus
 
 // Bodies for the EventResponse from the grpc server. Those
 // additional definitions are needed since the body is returned
@@ -16,21 +15,19 @@ data class Device(
     val name: String,
     val type: String,
     val address: String,
-    val status: SessionStatus
 ) : Parcelable
 
 @Parcelize
 data class Info(
-    val device_on: Boolean,
-    val on_time: Long,
+    val deviceOn: Boolean,
+    val onTime: Long,
     val overheated: Boolean,
     val brightness: Int,
     val hue: Int,
     val saturation: Int,
     val temperature: Int,
-    val dynamic_effect_id: String,
+    val dynamicEffectId: String,
     val color: Rgb,
-    val name: String
 ) : Parcelable {
     constructor(info: TapoOuterClass.InfoResponse) : this(
         info.deviceOn,
@@ -42,7 +39,6 @@ data class Info(
         if (info.hasTemperature()) info.temperature else 2500,
         info.dynamicEffectId,
         Rgb(info.color.red, info.color.green, info.color.blue),
-        info.name
     )
 }
 

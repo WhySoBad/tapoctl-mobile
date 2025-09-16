@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import tapo.TapoOuterClass
 
 @Composable
 fun AppWrapper(
@@ -69,12 +68,19 @@ fun AppWrapper(
                             }
                         }
                     }
-                } catch (e: GrpcNotConnectedException) {
+                } catch (_: GrpcNotConnectedException) {
                     scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_grpc_not_connected)) }
                 }
             } else {
                 scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_device_not_found, deviceId)) }
             }
+        }
+    }
+
+    fun handleEvent(event: Event) {
+        if (event is Event.DeviceStateChanged) {
+            deviceInfos[event.device] = event.info
+            deviceErrors[event.device] = false
         }
     }
 
@@ -85,34 +91,15 @@ fun AppWrapper(
                 connection.reconnect()
                 devices.fetchDevices()
                 devices.iterator().forEach { scope.launch { fetchDeviceInfo(it.key) } }
-                eventHandler.resubscribe()
+                eventHandler.resubscribe().onEach { handleEvent(it) }.collect()
             }.collect()
-        } catch (e: GrpcNotConnectedException) {
+        } catch (_: GrpcNotConnectedException) {
             scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.error_grpc_not_connected)) }
         }
     }
 
     LaunchedEffect(Unit) {
-        eventHandler.subscribe().onEach {
-            if (it is Event.DeviceStateChanged) {
-                deviceInfos[it.info.name] = it.info
-                deviceErrors[it.info.name] = false
-            } else if(it is Event.DeviceAuthChanged) {
-                if (it.device.status != TapoOuterClass.SessionStatus.Authenticated) {
-                    deviceErrors[it.device.name] = true;
-                    scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.error_invalid_session),
-                            actionLabel = context.getString(R.string.action_refresh)
-                        )
-                        when (result) {
-                            SnackbarResult.ActionPerformed -> fetchDeviceInfo(it.device.name)
-                            SnackbarResult.Dismissed -> {}
-                        }
-                    }
-                } else deviceErrors[it.device.name] = false;
-            }
-        }.collect()
+        eventHandler.subscribe().onEach { handleEvent(it) }.collect()
     }
 
     children(scope, connection, devices, eventHandler, snackbarHostState, deviceInfos, deviceErrors, ::fetchDeviceInfo)

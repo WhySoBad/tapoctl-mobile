@@ -110,7 +110,7 @@ fun DeviceCard(
         label = "Device icon color"
     )
 
-    val deviceRunning = info?.device_on ?: false
+    val deviceRunning = info?.deviceOn ?: false
 
     val scope = rememberCoroutineScope()
 
@@ -175,8 +175,8 @@ fun DeviceCard(
                         onClick = {
                             scope.launch {
                                 try {
-                                    device.setPower(info?.device_on?.not() ?: false)
-                                } catch (e: GrpcNotConnectedException) {
+                                    device.setPower(info?.deviceOn?.not() ?: false)
+                                } catch (_: GrpcNotConnectedException) {
                                     // TODO: Add snackbar or similar to indicate the error
                                 }
                             }

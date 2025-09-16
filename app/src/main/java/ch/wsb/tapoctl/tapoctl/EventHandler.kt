@@ -16,8 +16,7 @@ import tapo.TapoOuterClass
 import java.nio.charset.StandardCharsets
 
 sealed class Event {
-    data class DeviceAuthChanged(val device: Device) : Event()
-    data class DeviceStateChanged(val info: Info) : Event()
+    data class DeviceStateChanged(val info: Info, val device: String) : Event()
 }
 
 class EventHandler(private val connection: GrpcConnection, private val scope: CoroutineScope) {
@@ -35,18 +34,11 @@ class EventHandler(private val connection: GrpcConnection, private val scope: Co
                     .onEach { event ->
                         val body = String(event.body.toByteArray(), StandardCharsets.UTF_8)
                         when (event.type) {
-                            TapoOuterClass.EventType.DeviceAuthChange -> {
-                                Log.i("Event", "Received device auth state change event")
-                                val mapAdapter = Gson().getAdapter(object : TypeToken<Device>() {})
-                                val device = mapAdapter.fromJson(body)
-                                publisher.onNext(Event.DeviceAuthChanged(device))
-                            }
-
                             TapoOuterClass.EventType.DeviceStateChange -> {
                                 Log.i("Event", "Received device state change event")
                                 val mapAdapter = Gson().getAdapter(object : TypeToken<Info>() {})
                                 val info = mapAdapter.fromJson(body)
-                                publisher.onNext(Event.DeviceStateChanged(info))
+                                publisher.onNext(Event.DeviceStateChanged(info, event.device))
                             }
 
                             TapoOuterClass.EventType.UNRECOGNIZED -> TODO()
@@ -58,7 +50,7 @@ class EventHandler(private val connection: GrpcConnection, private val scope: Co
                     .collect()
             } catch (e: StatusException) {
                 Log.w("Event", "Closed event stream: $e")
-            } catch (e: GrpcNotConnectedException) {
+            } catch (_: GrpcNotConnectedException) {
                 Log.e("Event", "Grpc connection not connected")
             }
         }
@@ -66,9 +58,9 @@ class EventHandler(private val connection: GrpcConnection, private val scope: Co
         return getEvents()
     }
 
-    fun resubscribe() {
+    fun resubscribe(): Flow<Event> {
         unsubscribe()
-        subscribe()
+        return subscribe()
     }
 
     fun unsubscribe() {

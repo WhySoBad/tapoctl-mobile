@@ -1,5 +1,6 @@
 package ch.wsb.tapoctl.ui.views
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -89,7 +90,7 @@ fun SpecificDeviceView(
         ).toColor().toArgb().toHexString(HexFormat.UpperCase)
     }
 
-    val deviceRunning = info?.device_on ?: false
+    val deviceRunning = info?.deviceOn ?: false
 
     Box(
         modifier = Modifier.pullRefresh(refreshState)
@@ -107,7 +108,7 @@ fun SpecificDeviceView(
                             scope.launch {
                                 try {
                                     device.setPower(deviceRunning.not())
-                                } catch (e: GrpcNotConnectedException) {
+                                } catch (_: GrpcNotConnectedException) {
                                     // TODO: Add snackbar or similar to indicate the error
                                 }
                             }
@@ -189,7 +190,7 @@ fun SpecificDeviceView(
                                             scope.launch {
                                                 try {
                                                     device.set(hueSaturation = localHueSaturation?.toGrpcObject())
-                                                } catch (e: GrpcNotConnectedException) {
+                                                } catch (_: GrpcNotConnectedException) {
                                                     // TODO: Add snackbar or similar to indicate the error
                                                 }
                                             }
@@ -203,7 +204,7 @@ fun SpecificDeviceView(
                                             scope.launch {
                                                 try {
                                                     device.set(temperature = localTemperature)
-                                                } catch (e: GrpcNotConnectedException) {
+                                                } catch (_: GrpcNotConnectedException) {
                                                     // TODO: Add snackbar or similar to indicate the error
                                                 }
                                             }
@@ -351,6 +352,7 @@ fun ColorTemperatureSlider(
     }
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun HueSaturationField(
     hue: Int?,

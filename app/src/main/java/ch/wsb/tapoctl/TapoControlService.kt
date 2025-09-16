@@ -167,33 +167,16 @@ class TapoControlService : ControlsProviderService() {
 
     private fun handleEvent(event: Event) {
         when (event) {
-            is Event.DeviceAuthChanged -> {
-                val device = event.device
-                val ctrl = devices.getDeviceByControl(device.name)
-
-                if (ctrl == null) {
-                    Log.w("Event", "Device ${device.name} not found")
-                    return
-                }
-
-                if (device.status === TapoOuterClass.SessionStatus.Authenticated) {
-                    // TODO: Update with current device info
-                } else {
-                    if (ctrl.canControlTemperature()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.TEMPERATURE_ID, baseContext, Control.STATUS_ERROR))
-                    else if (ctrl.canControlColor()) publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.HUE_ID, baseContext, Control.STATUS_ERROR))
-                    else publisher.onNext(DeviceControl.getUnavailableControl(device.name, DeviceControl.POWER_ID, baseContext, Control.STATUS_ERROR))
-                }
-            }
             is Event.DeviceStateChanged -> {
                 val info = event.info
-                val ctrl = devices.getDeviceByControl(info.name)
+                val ctrl = devices.getDeviceByControl(event.device)
 
                 if (ctrl != null) {
-                    if (ctrl.canControlBrightness()) publisher.onNext(ctrl.getPowerBrightnessControl(info.device_on, info.brightness).build())
-                    else publisher.onNext(ctrl.getPowerControl(info.device_on).build())
+                    if (ctrl.canControlBrightness()) publisher.onNext(ctrl.getPowerBrightnessControl(info.deviceOn, info.brightness).build())
+                    else publisher.onNext(ctrl.getPowerControl(info.deviceOn).build())
                     if (ctrl.canControlTemperature()) publisher.onNext(ctrl.getTemperatureControl(info.temperature).build())
                     if (ctrl.canControlColor()) publisher.onNext(ctrl.getHueControl(info.hue).build())
-                } else Log.w("Event", "Device ${info.name} not found")
+                } else Log.w("Event", "Device ${event.device} not found")
             }
         }
     }
